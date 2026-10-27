@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 참고자료/공고.pdf
 *.zip
+.claude/
