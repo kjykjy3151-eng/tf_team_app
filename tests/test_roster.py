@@ -81,3 +81,8 @@ def test_reset_with_practice_csv_files(conn, name, students, teams):
     reset_with_roster(conn, ADMIN, roster, teams)
     assert conn.execute("select count(*) from tf_teams").fetchone()[0] == teams
     assert conn.execute("select count(*) from tf_students where not is_admin").fetchone()[0] == students
+
+
+def test_parse_roster_rejects_main_role_in_sub_roles():
+    with pytest.raises(RosterError, match="2행"):
+        parse_roster(_csv("2026001,가나다,기획자,기획자;발표자\n"))

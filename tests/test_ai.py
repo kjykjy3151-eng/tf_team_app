@@ -102,6 +102,7 @@ def test_request_body_and_text(server):
     _, body, auth = server.requests[0]
     assert body["model"] == "m:free" and body["stream"] is True
     assert body["reasoning"] == {"effort": "low"} and body["max_tokens"] >= 4000
+    assert body["temperature"] == 0
     assert auth == f"Bearer {KEY}"
 
 
@@ -157,6 +158,7 @@ def test_assign_falls_through_to_third_then_app(conn):
     out = assign(conn, ADMIN, use_ai=True, on_status=statuses.append, caller=caller, models=MODELS, api_key=KEY)
     assert out.message == "승인: AI 배정이 실패해 앱이 규칙을 지키는 배정을 찾음"
     assert out.assignment == {"C": 2, "D": 2}
+    assert out.source == "앱 배정(3차 모델까지 실패)"
     assert [s[:2] for s in statuses] == ["1차", "2차", "3차"]
     logs = recent_logs(conn)
     assert [(l["round_no"], l["ok"]) for l in logs] == [(3, False), (2, False), (1, False)]
@@ -169,6 +171,7 @@ def test_assign_uses_second_model_when_first_fails(conn):
     out = assign(conn, ADMIN, use_ai=True, on_status=lambda s: None, caller=caller, models=MODELS, api_key=KEY)
     assert out.message == "승인: 2차 모델의 배정안이 검사를 통과함"
     assert out.assignment == {"C": 2, "D": 2}
+    assert out.source == "2차 모델(m2:free)"
     assert caller.calls == ["m1:free", "m2:free"]
 
 

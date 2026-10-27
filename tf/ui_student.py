@@ -3,9 +3,17 @@
 import streamlit as st
 
 from tf.auth import User
-from tf.config import REFRESH_SEC
+from tf.config import REFRESH_SEC, to_kst
 from tf.db import get_pool
-from tf.service import apply, load_state, my_pending_team_no, my_team_no, pending_for_team, vote
+from tf.service import (
+    apply,
+    load_state,
+    my_applications,
+    my_pending_team_no,
+    my_team_no,
+    pending_for_team,
+    vote,
+)
 from tf.ui_common import render_teams, run_action, student_line
 
 
@@ -33,6 +41,7 @@ def _live(user: User) -> None:
         my_team = my_team_no(conn, me)
         pending_team = my_pending_team_no(conn, me)
         incoming = pending_for_team(conn, my_team, me) if my_team else []
+        history = my_applications(conn, me)
 
     status = "마감" if state.closed else "모집 중"
     st.write(f"모집 상태: **{status}**, 내 팀: **{f'팀{my_team}' if my_team else '아직 팀이 없음'}**")
@@ -44,7 +53,8 @@ def _live(user: User) -> None:
         for app in incoming:
             s = app.applicant
             cols = st.columns([6, 1, 1])
-            cols[0].write(f"{student_line(s)} (학번 {s.student_no})")
+            at = f" · {to_kst(app.applied_at, '%m-%d %H:%M:%S')}" if app.applied_at else ""
+            cols[0].write(f"{student_line(s)} · 학번 {s.student_no}{at}")
             if app.my_vote:
                 cols[1].write(f"내 투표: {app.my_vote}")
             else:
@@ -72,3 +82,19 @@ def _live(user: User) -> None:
             _act(lambda conn: apply(conn, me, team_no))
 
     render_teams(state.teams, my_team, apply_button)
+
+    st.subheader("내 지원 기록")
+    if history:
+        st.table(
+            [
+                {
+                    "팀": f"팀{h['team_no']}",
+                    "상태": h["status"],
+                    "이유": h["reason"] or "",
+                    "지원 시각": to_kst(h["created_at"], "%m-%d %H:%M:%S"),
+                }
+                for h in history
+            ]
+        )
+    else:
+        st.write("지원 기록 없음")

@@ -5,6 +5,7 @@
 잠그는 차례는 늘 팀 → 지원이다(교착을 막기 위해).
 """
 from dataclasses import dataclass
+from datetime import datetime
 
 import psycopg
 from psycopg import errors
@@ -31,6 +32,7 @@ class State:
 class PendingApp:
     applicant: Student
     my_vote: str | None
+    applied_at: datetime | None = None
 
 
 def _to_student(row) -> tuple[int, Student]:
@@ -109,14 +111,33 @@ def my_pending_team_no(conn: psycopg.Connection, student_no: str) -> int | None:
 def pending_for_team(conn: psycopg.Connection, team_no: int, voter_no: str) -> list[PendingApp]:
     """그 팀에 들어온 대기 지원(지원 시각 순)과 voter의 투표."""
     rows = conn.execute(
-        "select s.student_no, v.vote from tf_applications a"
+        "select s.student_no, v.vote, a.created_at from tf_applications a"
         " join tf_students s on s.id = a.student_id"
         " left join tf_votes v on v.application_id = a.id"
         "   and v.voter_id = (select id from tf_students where student_no = %s)"
         " where a.team_id = %s and a.status = '대기' order by a.created_at, a.id",
         (voter_no, team_no),
     ).fetchall()
-    return [PendingApp(_student(conn, no)[1], my_vote) for no, my_vote in rows]
+    return [PendingApp(_student(conn, no)[1], my_vote, at) for no, my_vote, at in rows]
+
+
+APPLICATION_SQL = """
+    select s.name, a.team_id, a.status, a.reason, a.created_at
+    from tf_applications a join tf_students s on s.id = a.student_id
+"""
+APPLICATION_KEYS = ["name", "team_no", "status", "reason", "created_at"]
+
+
+def my_applications(conn: psycopg.Connection, student_no: str) -> list[dict]:
+    """내 지원 기록. 최근 것부터."""
+    rows = conn.execute(APPLICATION_SQL + " where s.student_no = %s order by a.id desc", (student_no,)).fetchall()
+    return [dict(zip(APPLICATION_KEYS, r)) for r in rows]
+
+
+def all_applications(conn: psycopg.Connection, limit: int = 100) -> list[dict]:
+    """모든 학생의 지원 기록(관리자 현황). 최근 것부터."""
+    rows = conn.execute(APPLICATION_SQL + " order by a.id desc limit %s", (limit,)).fetchall()
+    return [dict(zip(APPLICATION_KEYS, r)) for r in rows]
 
 
 def apply(conn: psycopg.Connection, student_no: str, team_no: int) -> str:
@@ -229,13 +250,16 @@ def close_recruitment(conn: psycopg.Connection, user: User) -> str:
         )
         rejected = conn.execute(
             "update tf_applications set status = '거절', reason = '모집 마감', decided_at = now()"
-            " where status = '대기' returning id"
+            " where status = '대기' returning student_id"
         ).fetchall()
         removed = conn.execute(
             "delete from tf_members where team_id in"
             " (select team_id from tf_members group by team_id having count(*) = 1) returning student_id"
         ).fetchall()
-    return f"승인: 모집을 마감함(대기 지원 {len(rejected)}건 거절, {len(removed)}명이 팀에서 빠짐)"
+        names = dict(conn.execute("select id, name from tf_students").fetchall())
+    rejected_names = ", ".join(sorted(names[r[0]] for r in rejected)) or "없음"
+    removed_names = ", ".join(sorted(names[r[0]] for r in removed)) or "없음"
+    return f"승인: 모집을 마감함(거절한 지원: {rejected_names} / 팀에서 뺀 학생: {removed_names})"
 
 
 def confirm_assignment(conn: psycopg.Connection, user: User, assignment: dict[str, int]) -> str:

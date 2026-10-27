@@ -188,3 +188,23 @@ def test_simultaneous_last_seat(conn, connect):
         t.join()
     assert len(load_state(conn).teams[0].members) == 1
     assert sorted(word(r) for r in results) in (["대기", "승인"], ["거절", "승인"])
+
+
+def test_application_history(conn):
+    from tf.service import all_applications, my_applications
+
+    setup(conn, {"A": (PL,), "B": (WP,)})
+    apply(conn, "A", 1); apply(conn, "B", 1); vote(conn, "A", "B", False); apply(conn, "B", 2)
+    mine = my_applications(conn, "B")
+    assert [(r["team_no"], r["status"], r["reason"]) for r in mine] == [(2, "승인", None), (1, "거절", "팀원이 거부함")]
+    assert mine[0]["created_at"] is not None
+    everyone = all_applications(conn)
+    assert [(r["name"], r["team_no"], r["status"]) for r in everyone] == [
+        ("이름B", 2, "승인"), ("이름B", 1, "거절"), ("이름A", 1, "승인"),
+    ]
+
+
+def test_pending_has_applied_time(conn):
+    setup(conn, {"A": (PL,), "B": (WP,)})
+    apply(conn, "A", 1); apply(conn, "B", 1)
+    assert pending_for_team(conn, 1, "A")[0].applied_at is not None

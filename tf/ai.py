@@ -35,6 +35,7 @@ class AssignOutcome:
     assignment: dict[str, int] | None
     message: str  # result 안내
     status: str  # assign_status 안내
+    source: str = ""  # 배정안 출처(예: "1차 모델(...)", "앱 배정")
 
 
 def _is_free(model: str) -> bool:
@@ -70,6 +71,7 @@ def call_model(
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
+        "temperature": 0,
         "max_tokens": AI_MAX_TOKENS,
         "reasoning": {"effort": "low"},
     }
@@ -216,7 +218,9 @@ def assign(
         reason = no_solution_reason(state.teams, state.unassigned)
         return AssignOutcome(None, "막힘: 규칙을 지키는 배정이 없음", f"규칙을 지키는 배정이 없음: {reason}")
     if not use_ai:
-        return AssignOutcome(found, "승인: 앱이 규칙을 지키는 배정을 찾음(AI를 부르지 않음)", "AI를 부르지 않고 앱이 배정함")
+        return AssignOutcome(
+            found, "승인: 앱이 규칙을 지키는 배정을 찾음(AI를 부르지 않음)", "AI를 부르지 않고 앱이 배정함", "앱 배정(AI를 부르지 않음)"
+        )
 
     key = api_key or get_secret("OPENROUTER_API_KEY") or ""
     prompt = build_prompt(state)
@@ -237,8 +241,14 @@ def assign(
         elapsed = time.monotonic() - start
         log_ai_call(conn, i, model, True, elapsed, None)
         return AssignOutcome(
-            plan, f"승인: {i}차 모델의 배정안이 검사를 통과함", f"{i}차 모델({model})의 배정안이 검사를 통과함({elapsed:.0f}초)"
+            plan,
+            f"승인: {i}차 모델의 배정안이 검사를 통과함",
+            f"{i}차 모델({model})의 배정안이 검사를 통과함({elapsed:.0f}초)",
+            f"{i}차 모델({model})",
         )
     return AssignOutcome(
-        found, "승인: AI 배정이 실패해 앱이 규칙을 지키는 배정을 찾음", f"{len(models)}차 모델까지 실패해 앱이 배정함"
+        found,
+        "승인: AI 배정이 실패해 앱이 규칙을 지키는 배정을 찾음",
+        f"{len(models)}차 모델까지 실패해 앱이 배정함",
+        f"앱 배정({len(models)}차 모델까지 실패)",
     )

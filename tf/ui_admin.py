@@ -8,7 +8,7 @@ from tf.auth import User
 from tf.config import REFRESH_SEC, to_kst
 from tf.db import get_pool
 from tf.roster import parse_roster, reset_with_roster
-from tf.service import close_recruitment, confirm_assignment, load_state
+from tf.service import all_applications, close_recruitment, confirm_assignment, load_state
 from tf.ui_common import render_teams, run_action, set_result
 
 
@@ -49,6 +49,7 @@ def _run_assign(user: User, use_ai: bool, status_slot) -> None:
         set_result(out.message)
         st.session_state["draft"] = out.assignment
         st.session_state["assign_status"] = out.status
+        st.session_state["draft_source"] = out.source
     except PermissionError as e:
         set_result(str(e))
     except (psycopg.Error, AiError) as e:
@@ -83,7 +84,7 @@ def _assign_section(user: User, state) -> None:
     draft = st.session_state.get("draft")
     if draft:
         by_no = {s.student_no: s for s in state.unassigned}
-        st.write("검사를 통과한 배정안")
+        st.write(f"검사를 통과한 배정안, 출처: {st.session_state.get('draft_source', '')}")
         st.table(
             [
                 {
@@ -107,12 +108,29 @@ def _live() -> None:
     with get_pool().connection() as conn:
         state = load_state(conn)
         logs = recent_logs(conn)
+        history = all_applications(conn)
     st.header("현황")
     st.caption(f"화면은 {REFRESH_SEC}초마다 저절로 바뀜")
     with st.container(key="unassigned"):
         names = ", ".join(s.name for s in state.unassigned) or "없음"
         st.write(f"팀이 없는 학생 {len(state.unassigned)}명: {names}")
     render_teams(state.teams, None, None)
+    st.subheader("지원 기록")
+    if history:
+        st.table(
+            [
+                {
+                    "지원자": h["name"],
+                    "팀": f"팀{h['team_no']}",
+                    "상태": h["status"],
+                    "이유": h["reason"] or "",
+                    "지원 시각": to_kst(h["created_at"], "%m-%d %H:%M:%S"),
+                }
+                for h in history
+            ]
+        )
+    else:
+        st.write("지원 기록 없음")
     with st.expander(f"AI 기록(최근 {len(logs)}건)"):
         if logs:
             st.table(

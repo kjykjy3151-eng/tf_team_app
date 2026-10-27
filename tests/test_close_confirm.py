@@ -30,7 +30,7 @@ def test_close_rejects_pending_and_removes_singletons(conn):
     apply(conn, "C", 2); apply(conn, "D", 2)  # D 대기
     apply(conn, "E", 3)
     msg = close_recruitment(conn, ADMIN)
-    assert msg == "승인: 모집을 마감함(대기 지원 2건 거절, 3명이 팀에서 빠짐)"
+    assert msg == "승인: 모집을 마감함(거절한 지원: 이름B, 이름D / 팀에서 뺀 학생: 이름A, 이름C, 이름E)"
     assert status_of(conn, "B") == ("거절", "모집 마감")
     assert status_of(conn, "D") == ("거절", "모집 마감")
     state = load_state(conn)
@@ -41,7 +41,7 @@ def test_close_rejects_pending_and_removes_singletons(conn):
 def test_close_keeps_teams_with_two_or_more(conn):
     setup(conn, {"A": (PL,), "B": (WP,)}, 2)
     apply(conn, "A", 1); apply(conn, "B", 1); vote(conn, "A", "B", True)
-    close_recruitment(conn, ADMIN)
+    assert close_recruitment(conn, ADMIN) == "승인: 모집을 마감함(거절한 지원: 없음 / 팀에서 뺀 학생: 없음)"
     assert [m.student_no for m in load_state(conn).teams[0].members] == ["A", "B"]
 
 

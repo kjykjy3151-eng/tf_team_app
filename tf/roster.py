@@ -47,6 +47,8 @@ def parse_roster(data: bytes) -> list[Student]:
         bad = [r for r in sub_roles if r not in ROLES]
         if bad:
             raise RosterError(f"CSV {line_no}행: 보조 역할 '{bad[0]}'은(는) 6개 역할이 아님")
+        if main_role in sub_roles:
+            raise RosterError(f"CSV {line_no}행: 보조 역할에 주 역할 '{main_role}'이(가) 또 있음")
         if len(sub_roles) > 2 or len(set(sub_roles)) != len(sub_roles):
             raise RosterError(f"CSV {line_no}행: 보조 역할은 서로 다른 0~2개여야 함")
         seen.add(no)

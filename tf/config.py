@@ -29,9 +29,9 @@ def get_secret(name: str) -> str | None:
     return os.getenv(name) or None
 
 
-def to_kst(dt: datetime) -> str:
+def to_kst(dt: datetime, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
     """DB의 시각(UTC)을 한국 시각 문자열로 바꾼다."""
-    return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M:%S")
+    return dt.astimezone(KST).strftime(fmt)
 
 
 # 오픈라우터 무료 텍스트 생성 모델(공고 4.3절). 1차가 실패하면 2차, 3차로 넘어간다.
