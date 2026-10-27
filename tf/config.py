@@ -44,3 +44,6 @@ AI_MODELS: tuple[str, str, str] = (
 AI_DEADLINE_SEC = 120  # 모델 하나를 부른 때부터 응답을 다 받을 때까지
 AI_MAX_TOKENS = 8000
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# 다른 사람의 변경을 다시 그리는 간격. 공고는 5초 이하, 채점 프로그램은 단추를 7초까지 기다린다.
+REFRESH_SEC = 3

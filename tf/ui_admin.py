@@ -5,7 +5,7 @@ import streamlit as st
 
 from tf.ai import AiError, assign, recent_logs
 from tf.auth import User
-from tf.config import to_kst
+from tf.config import REFRESH_SEC, to_kst
 from tf.db import get_pool
 from tf.roster import parse_roster, reset_with_roster
 from tf.service import close_recruitment, confirm_assignment, load_state
@@ -61,10 +61,6 @@ def _assign_section(user: User, state) -> None:
     if st.button("모집 마감", key="admin_close", type="primary"):
         _act(lambda conn: close_recruitment(conn, user), clear_draft=True)
 
-    with st.container(key="unassigned"):
-        names = ", ".join(s.name for s in state.unassigned) or "없음"
-        st.write(f"팀이 없는 학생 {len(state.unassigned)}명: {names}")
-
     use_ai = st.checkbox("AI를 부름(끄면 앱이 바로 배정함)", value=True, key="admin_use_ai")
     if st.button("AI 배정", key="admin_assign", type="primary"):
         # 다음 실행에서 배정한다. 그 실행은 처음부터 배정만 하므로 다른 다시 그리기와 겹치지 않는다.
@@ -106,9 +102,16 @@ def _assign_section(user: User, state) -> None:
             _act(lambda conn: confirm_assignment(conn, user, draft), clear_draft=True)
 
 
-def _status_section(state, logs) -> None:
+def _live() -> None:
+    """현황: 팀이 없는 학생, 팀 목록, AI 기록. render가 이 부분만 몇 초마다 다시 그리게 한다."""
+    with get_pool().connection() as conn:
+        state = load_state(conn)
+        logs = recent_logs(conn)
     st.header("현황")
-    st.write(f"학생 {sum(len(t.members) for t in state.teams) + len(state.unassigned)}명, 팀이 없는 학생 {len(state.unassigned)}명")
+    st.caption(f"화면은 {REFRESH_SEC}초마다 저절로 바뀜")
+    with st.container(key="unassigned"):
+        names = ", ".join(s.name for s in state.unassigned) or "없음"
+        st.write(f"팀이 없는 학생 {len(state.unassigned)}명: {names}")
     render_teams(state.teams, None, None)
     with st.expander(f"AI 기록(최근 {len(logs)}건)"):
         if logs:
@@ -130,11 +133,12 @@ def _status_section(state, logs) -> None:
 
 
 def render(user: User) -> None:
+    # AI 배정을 하는 실행에서는 현황을 자동으로 다시 그리지 않는다(배정이 끊기지 않게).
+    assigning = bool(st.session_state.get("assign_requested"))
     _roster_section(user)
     with get_pool().connection() as conn:
         state = load_state(conn)
-        logs = recent_logs(conn)
     st.divider()
     _assign_section(user, state)
     st.divider()
-    _status_section(state, logs)
+    st.fragment(_live, run_every=None if assigning else REFRESH_SEC)()
