@@ -1,0 +1,9 @@
+# 2026-10-27 16:00 KST
+streamlit>=1.66
+psycopg[binary]>=3.2
+psycopg-pool>=3.2
+bcrypt>=4.2
+requests>=2.32
+python-dotenv>=1.0
+tzdata
+pytest>=8
