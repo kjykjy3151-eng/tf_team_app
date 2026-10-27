@@ -6,8 +6,10 @@ import psycopg
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
+from tf.config import TEAM_MAX
 from tf.db import get_pool
 from tf.roster import RosterError
+from tf.rules import Student
 
 RESULT_WORDS = ("승인", "대기", "거절", "막힘")
 
@@ -42,6 +44,28 @@ def run_action(action: Callable[[psycopg.Connection], str]) -> None:
         msg = str(e)
     except RosterError as e:
         msg = f"막힘: {e}"
+    except LookupError:
+        msg = "막힘: 명단에 없는 학번임(명단이 바뀌었으면 다시 로그인)"
     except psycopg.Error as e:
         msg = f"막힘: DB 오류({type(e).__name__})"
     set_result(msg)
+
+
+def student_line(s: Student) -> str:
+    subs = ", ".join(s.sub_roles) or "없음"
+    return f"{s.name} · 주 역할 {s.main_role} · 보조 역할 {subs}"
+
+
+def render_teams(teams, my_team_no: int | None, apply_button: Callable[[int], None] | None) -> None:
+    """팀마다 key가 team_{번호}인 컨테이너에 팀원의 이름과 역할을 보여 준다."""
+    for team in teams:
+        with st.container(key=f"team_{team.no}", border=True):
+            mine = " `내 팀`" if team.no == my_team_no else ""
+            st.markdown(f"**팀{team.no}**{mine} ({len(team.members)}/{TEAM_MAX}명)")
+            if team.members:
+                for m in team.members:
+                    st.markdown(f"- {student_line(m)}")
+            else:
+                st.write("빈 팀")
+            if apply_button:
+                apply_button(team.no)
