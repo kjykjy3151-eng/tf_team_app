@@ -1,0 +1,7 @@
+# 2026-10-27 14:08 KST
+.env
+.streamlit/secrets.toml
+__pycache__/
+.venv/
+참고자료/공고.pdf
+*.zip
