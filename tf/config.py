@@ -32,3 +32,15 @@ def get_secret(name: str) -> str | None:
 def to_kst(dt: datetime) -> str:
     """DB의 시각(UTC)을 한국 시각 문자열로 바꾼다."""
     return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M:%S")
+
+
+# 오픈라우터 무료 텍스트 생성 모델(공고 4.3절). 1차가 실패하면 2차, 3차로 넘어간다.
+# 이름이 :free로 끝나는 모델만 쓴다(비용 0원). openrouter/free 라우터는 쓰지 않는다.
+AI_MODELS: tuple[str, str, str] = (
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "google/gemma-4-31b-it:free",
+    "poolside/laguna-s-2.1:free",
+)
+AI_DEADLINE_SEC = 120  # 모델 하나를 부른 때부터 응답을 다 받을 때까지
+AI_MAX_TOKENS = 8000
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"

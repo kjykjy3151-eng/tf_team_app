@@ -21,18 +21,24 @@ def set_result(msg: str) -> None:
 
 
 def result_box() -> DeltaGenerator:
-    """화면 위쪽에 result 자리를 만든다. 내용은 단추를 처리한 뒤 fill_result로 채운다."""
-    return st.container(key="result")
+    """화면 위쪽에 result 자리를 만들고 지금 안내를 바로 넣는다.
+
+    실행이 중간에 st.rerun으로 멈춰도 안내가 비지 않게 한다. 단추를 처리한 뒤에는
+    fill_result로 다시 채운다.
+    """
+    with st.container(key="result"):
+        slot = st.empty()
+    fill_result(slot)
+    return slot
 
 
-def fill_result(box: DeltaGenerator) -> None:
-    with box:
-        msg = st.session_state.get("result")
-        if msg:
-            st.info(msg)
-        else:
-            # 빈 컨테이너는 화면에 그려지지 않으므로 빈칸 하나를 넣어 result 자리를 늘 둔다.
-            st.markdown("&nbsp;")
+def fill_result(slot: DeltaGenerator) -> None:
+    msg = st.session_state.get("result")
+    if msg:
+        slot.info(msg)
+    else:
+        # 빈 컨테이너는 화면에 그려지지 않으므로 빈칸 하나를 넣어 result 자리를 늘 둔다.
+        slot.markdown("&nbsp;")
 
 
 def run_action(action: Callable[[psycopg.Connection], str]) -> None:

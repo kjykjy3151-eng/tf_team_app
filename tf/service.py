@@ -9,8 +9,9 @@ from dataclasses import dataclass
 import psycopg
 from psycopg import errors
 
+from tf.auth import User, require_admin
 from tf.config import TEAM_MAX
-from tf.rules import Student, Team, join_block_reason
+from tf.rules import Student, Team, join_block_reason, validate_assignment
 
 STUDENT_SQL = """
     select s.id, s.student_no, s.name, s.main_role,
@@ -213,3 +214,41 @@ def vote(conn: psycopg.Connection, voter_no: str, applicant_no: str, yes: bool) 
         _add_member(conn, team_no, applicant_id)
         _decide(conn, app_id, "승인", None)
         return f"승인: 팀{team_no}에 들어감"
+
+
+def close_recruitment(conn: psycopg.Connection, user: User) -> str:
+    """모집 마감(공고 2.5절 1~2항): 마감 표시, 대기 지원 거절, 1명뿐인 팀의 학생을 팀에서 뺌."""
+    require_admin(user)
+    with conn.transaction():
+        conn.execute("select id from tf_teams order by id for update")
+        if _closed(conn):
+            return "막힘: 이미 마감됨"
+        conn.execute(
+            "insert into tf_settings (key, value) values ('closed', 'true')"
+            " on conflict (key) do update set value = 'true'"
+        )
+        rejected = conn.execute(
+            "update tf_applications set status = '거절', reason = '모집 마감', decided_at = now()"
+            " where status = '대기' returning id"
+        ).fetchall()
+        removed = conn.execute(
+            "delete from tf_members where team_id in"
+            " (select team_id from tf_members group by team_id having count(*) = 1) returning student_id"
+        ).fetchall()
+    return f"승인: 모집을 마감함(대기 지원 {len(rejected)}건 거절, {len(removed)}명이 팀에서 빠짐)"
+
+
+def confirm_assignment(conn: psycopg.Connection, user: User, assignment: dict[str, int]) -> str:
+    """배정안 확정(공고 2.5절 7항). 저장 직전에 지금 상태로 다시 검사한다."""
+    require_admin(user)
+    with conn.transaction():
+        conn.execute("select id from tf_teams order by id for update")
+        state = load_state(conn)
+        if not state.closed:
+            return "막힘: 먼저 모집을 마감해야 함"
+        errors = validate_assignment(state.teams, state.unassigned, assignment)
+        if errors:
+            return f"막힘: 배정안이 지금 상태와 맞지 않음({errors[0]})"
+        for no, team_no in assignment.items():
+            _add_member(conn, team_no, _student(conn, no)[0])
+    return f"승인: 배정을 확정함({len(assignment)}명)"
