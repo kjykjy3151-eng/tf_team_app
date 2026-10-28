@@ -12,13 +12,21 @@ st.set_page_config(page_title="팀 편성")
 
 
 @st.cache_resource
+def _ensure_admin_once(password: str) -> None:
+    """같은 비밀번호로는 앱 프로세스에서 한 번만 관리자 계정을 만들거나 갱신한다."""
+    with get_pool().connection() as conn:
+        ensure_admin(conn, password)
+
+
 def init_admin() -> bool:
-    """앱이 시작할 때 한 번, ADMIN_PASSWORD로 관리자 계정을 만들거나 비밀번호를 갱신한다."""
+    """ADMIN_PASSWORD로 관리자 계정을 만들거나 비밀번호를 갱신한다.
+
+    비밀 값이 없을 때의 결과는 저장하지 않는다. 배포 뒤에 Secrets를 넣어도 바로 반영되게 하기 위함이다.
+    """
     password = get_secret("ADMIN_PASSWORD")
     if not password:
         return False
-    with get_pool().connection() as conn:
-        ensure_admin(conn, password)
+    _ensure_admin_once(password)
     return True
 
 
