@@ -4,17 +4,8 @@ import streamlit as st
 
 from tf.auth import User
 from tf.config import REFRESH_SEC, to_kst
-from tf.db import get_pool
-from tf.service import (
-    apply,
-    load_state,
-    my_applications,
-    my_pending_team_no,
-    my_team_no,
-    pending_for_team,
-    vote,
-)
-from tf.ui_common import render_teams, run_action, student_line
+from tf.service import apply, vote
+from tf.ui_common import get_snapshot, render_teams, run_action, student_line
 
 
 def _act(action) -> None:
@@ -36,12 +27,12 @@ def _live(user: User) -> None:
     단추를 누르면 _act가 앱 전체를 다시 그려 result와 팀 목록을 함께 바꾼다.
     """
     me = user.student_no
-    with get_pool().connection() as conn:
-        state = load_state(conn)
-        my_team = my_team_no(conn, me)
-        pending_team = my_pending_team_no(conn, me)
-        incoming = pending_for_team(conn, my_team, me) if my_team else []
-        history = my_applications(conn, me)
+    snap = get_snapshot()
+    state = snap.state
+    my_team = snap.my_team_no(me)
+    pending_team = snap.my_pending_team_no(me)
+    incoming = snap.pending_for_team(my_team, me) if my_team else []
+    history = snap.my_applications(me)
 
     status = "마감" if state.closed else "모집 중"
     st.write(f"모집 상태: **{status}**, 내 팀: **{f'팀{my_team}' if my_team else '아직 팀이 없음'}**")

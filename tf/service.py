@@ -146,6 +146,82 @@ def all_applications(conn: psycopg.Connection, limit: int = 100) -> list[dict]:
     return [dict(zip(APPLICATION_KEYS, r)) for r in rows]
 
 
+SNAPSHOT_SQL = """
+select
+  (select coalesce(json_agg(json_build_object(
+      'id', s.id, 'no', s.student_no, 'name', s.name, 'main', s.main_role, 'admin', s.is_admin,
+      'subs', coalesce((select json_agg(r.role order by r.role) from tf_student_sub_roles r where r.student_id = s.id),
+                       '[]'::json))), '[]'::json) from tf_students s),
+  (select coalesce(json_agg(id order by id), '[]'::json) from tf_teams),
+  (select coalesce(json_agg(json_build_array(team_id, student_id) order by team_id, slot_no), '[]'::json) from tf_members),
+  (select coalesce(json_agg(json_build_object(
+      'id', a.id, 'sid', a.student_id, 'team', a.team_id, 'status', a.status, 'reason', a.reason, 'at', a.created_at)
+      order by a.id desc), '[]'::json) from tf_applications a),
+  (select coalesce(json_agg(json_build_array(application_id, voter_id, vote)), '[]'::json) from tf_votes),
+  (select value from tf_settings where key = 'closed')
+"""
+
+
+@dataclass
+class Snapshot:
+    """한 번의 질의로 읽은 앱 상태. 화면은 이것으로 그려서, 접속한 학생이 많아도 DB 질의가 늘지 않게 한다."""
+
+    state: State
+    students: dict[int, Student]  # id → 학생(관리자 포함)
+    team_of: dict[str, int]  # 학번 → 팀 번호
+    apps: list[dict]  # 모든 지원, id 내림차순
+    votes: dict[tuple[int, int], str]  # (지원 id, 투표자 id) → 찬성, 거부
+    id_of: dict[str, int]  # 학번 → id
+
+    def my_team_no(self, student_no: str) -> int | None:
+        return self.team_of.get(student_no)
+
+    def my_pending_team_no(self, student_no: str) -> int | None:
+        sid = self.id_of.get(student_no)
+        return next((a["team"] for a in self.apps if a["sid"] == sid and a["status"] == "대기"), None)
+
+    def pending_for_team(self, team_no: int, voter_no: str) -> list[PendingApp]:
+        voter = self.id_of.get(voter_no)
+        apps = sorted(
+            (a for a in self.apps if a["team"] == team_no and a["status"] == "대기"), key=lambda a: (a["at"], a["id"])
+        )
+        return [PendingApp(self.students[a["sid"]], self.votes.get((a["id"], voter)), a["at"]) for a in apps]
+
+    def _app_dict(self, a: dict) -> dict:
+        return dict(zip(APPLICATION_KEYS, [self.students[a["sid"]].name, a["team"], a["status"], a["reason"], a["at"]]))
+
+    def my_applications(self, student_no: str) -> list[dict]:
+        sid = self.id_of.get(student_no)
+        return [self._app_dict(a) for a in self.apps if a["sid"] == sid]
+
+    def all_applications(self, limit: int = 100) -> list[dict]:
+        return [self._app_dict(a) for a in self.apps[:limit]]
+
+
+def load_snapshot(conn: psycopg.Connection) -> Snapshot:
+    """학생, 팀, 팀원, 지원, 투표, 마감 표시를 질의 한 번으로 읽는다."""
+    students_j, teams_j, members_j, apps_j, votes_j, closed = conn.execute(SNAPSHOT_SQL).fetchone()
+    students = {s["id"]: Student(s["no"], s["name"], s["main"], tuple(s["subs"])) for s in students_j}
+    admins = {s["id"] for s in students_j if s["admin"]}
+    teams = {no: Team(no, []) for no in teams_j}
+    placed = set()
+    for team_id, student_id in members_j:
+        teams[team_id].members.append(students[student_id])
+        placed.add(student_id)
+    unassigned = sorted(
+        (s for sid, s in students.items() if sid not in placed and sid not in admins), key=lambda s: s.student_no
+    )
+    apps = [{**a, "at": datetime.fromisoformat(a["at"])} for a in apps_j]
+    return Snapshot(
+        state=State(list(teams.values()), unassigned, closed == "true"),
+        students=students,
+        team_of={students[sid].student_no: tid for tid, sid in members_j},
+        apps=apps,
+        votes={(aid, vid): v for aid, vid, v in votes_j},
+        id_of={s.student_no: sid for sid, s in students.items()},
+    )
+
+
 def apply(conn: psycopg.Connection, student_no: str, team_no: int) -> str:
     """지원 단추. 막히면 기록하지 않고 '막힘: 이유'를 돌려준다."""
     try:

@@ -8,8 +8,8 @@ from tf.auth import User
 from tf.config import REFRESH_SEC, to_kst
 from tf.db import get_pool
 from tf.roster import parse_roster, reset_with_roster
-from tf.service import all_applications, assignment_applied, close_recruitment, confirm_assignment, load_state
-from tf.ui_common import render_teams, run_action, set_result
+from tf.service import assignment_applied, close_recruitment, confirm_assignment
+from tf.ui_common import get_snapshot, render_teams, run_action, set_result
 
 
 def _act(action, clear_draft: bool = False) -> None:
@@ -112,10 +112,11 @@ def _assign_section(user: User, state) -> None:
 @st.fragment(run_every=REFRESH_SEC)
 def _live() -> None:
     """현황: 팀이 없는 학생, 팀 목록, AI 기록. render가 이 부분만 몇 초마다 다시 그리게 한다."""
+    snap = get_snapshot()
+    state = snap.state
+    history = snap.all_applications()
     with get_pool().connection() as conn:
-        state = load_state(conn)
         logs = recent_logs(conn)
-        history = all_applications(conn)
     st.header("현황")
     st.caption(f"화면은 {REFRESH_SEC}초마다 저절로 바뀜")
     with st.container(key="unassigned"):
@@ -160,8 +161,7 @@ def _live() -> None:
 def render(user: User) -> None:
     # 현황의 자동 갱신은 실행 중인 전체 실행(AI 배정 포함)을 끊지 않으므로 늘 켜 둔다.
     _roster_section(user)
-    with get_pool().connection() as conn:
-        state = load_state(conn)
+    state = get_snapshot().state
     st.divider()
     _assign_section(user, state)
     st.divider()
