@@ -8,7 +8,7 @@ from tf.auth import User
 from tf.config import REFRESH_SEC, to_kst
 from tf.db import get_pool
 from tf.roster import parse_roster, reset_with_roster
-from tf.service import all_applications, close_recruitment, confirm_assignment, load_state
+from tf.service import all_applications, assignment_applied, close_recruitment, confirm_assignment, load_state
 from tf.ui_common import render_teams, run_action, set_result
 
 
@@ -82,6 +82,12 @@ def _assign_section(user: User, state) -> None:
             slot.markdown("&nbsp;")
 
     draft = st.session_state.get("draft")
+    if draft and assignment_applied(state, draft):
+        # 확정은 저장됐는데 화면이 그 뒤를 못 따라온 경우, DB에 맞춰 배정안을 지우고 결과를 고친다.
+        st.session_state.pop("draft", None)
+        st.session_state.pop("assign_status", None)
+        set_result(f"승인: 배정을 확정함({len(draft)}명)")
+        draft = None
     if draft:
         by_no = {s.student_no: s for s in state.unassigned}
         st.write(f"검사를 통과한 배정안, 출처: {st.session_state.get('draft_source', '')}")
@@ -103,6 +109,7 @@ def _assign_section(user: User, state) -> None:
             _act(lambda conn: confirm_assignment(conn, user, draft), clear_draft=True)
 
 
+@st.fragment(run_every=REFRESH_SEC)
 def _live() -> None:
     """현황: 팀이 없는 학생, 팀 목록, AI 기록. render가 이 부분만 몇 초마다 다시 그리게 한다."""
     with get_pool().connection() as conn:
@@ -151,12 +158,11 @@ def _live() -> None:
 
 
 def render(user: User) -> None:
-    # AI 배정을 하는 실행에서는 현황을 자동으로 다시 그리지 않는다(배정이 끊기지 않게).
-    assigning = bool(st.session_state.get("assign_requested"))
+    # 현황의 자동 갱신은 실행 중인 전체 실행(AI 배정 포함)을 끊지 않으므로 늘 켜 둔다.
     _roster_section(user)
     with get_pool().connection() as conn:
         state = load_state(conn)
     st.divider()
     _assign_section(user, state)
     st.divider()
-    st.fragment(_live, run_every=None if assigning else REFRESH_SEC)()
+    _live()

@@ -4,7 +4,7 @@ import pytest
 from tf.auth import User
 from tf.roster import reset_with_roster
 from tf.rules import Student
-from tf.service import apply, close_recruitment, confirm_assignment, load_state, vote
+from tf.service import apply, assignment_applied, close_recruitment, confirm_assignment, load_state, vote
 
 ADMIN = User("admin", "관리자", True)
 STUDENT = User("A", "이름A", False)
@@ -79,3 +79,16 @@ def test_confirm_saves_and_rechecks(conn):
     assert state.unassigned == []
     # 한 번 확정한 뒤 같은 배정안을 또 누르면 지금 상태와 맞지 않는다.
     assert confirm_assignment(conn, ADMIN, {"C": 2, "D": 2}).startswith("막힘: 배정안이 지금 상태와 맞지 않음")
+
+
+def test_assignment_applied_detects_confirmed_draft(conn):
+    # 확정은 저장됐는데 화면의 배정안이 남은 경우를 알아본다.
+    setup(conn, {"A": (PL,), "B": (WP,), "C": (PL,), "D": (WP,)}, 2)
+    apply(conn, "A", 1); apply(conn, "B", 1); vote(conn, "A", "B", True)
+    close_recruitment(conn, ADMIN)
+    draft = {"C": 2, "D": 2}
+    assert not assignment_applied(load_state(conn), draft)
+    confirm_assignment(conn, ADMIN, draft)
+    assert assignment_applied(load_state(conn), draft)
+    assert not assignment_applied(load_state(conn), {"C": 1, "D": 2})
+    assert not assignment_applied(load_state(conn), {})

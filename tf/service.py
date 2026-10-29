@@ -91,6 +91,12 @@ def load_state(conn: psycopg.Connection) -> State:
     return State(list(teams.values()), unassigned, _closed(conn))
 
 
+def assignment_applied(state: State, assignment: dict[str, int]) -> bool:
+    """배정안의 학생이 모두 이미 그 팀에 들어가 있으면(확정이 저장됨) True."""
+    team_of = {m.student_no: t.no for t in state.teams for m in t.members}
+    return bool(assignment) and all(team_of.get(no) == team_no for no, team_no in assignment.items())
+
+
 def my_team_no(conn: psycopg.Connection, student_no: str) -> int | None:
     row = conn.execute(
         "select m.team_id from tf_members m join tf_students s on s.id = m.student_id where s.student_no = %s",
