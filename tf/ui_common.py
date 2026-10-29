@@ -8,7 +8,6 @@ import psycopg
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
-from tf import diag
 from tf.config import TEAM_MAX
 from tf.db import get_pool
 from tf.roster import RosterError
@@ -87,11 +86,8 @@ class SharedSnapshot:
 
 
 def _load_from_db() -> Snapshot:
-    t = time.monotonic()
     with get_pool().connection() as conn:
-        snap = load_snapshot(conn)
-    diag.add("loads"); diag.add("load_sec", time.monotonic() - t)
-    return snap
+        return load_snapshot(conn)
 
 
 @st.cache_resource
@@ -101,10 +97,7 @@ def _shared() -> SharedSnapshot:
 
 def get_snapshot() -> Snapshot:
     """화면을 그릴 때 쓰는 상태. 1초 안에 다른 화면이 읽은 것이 있으면 그것을 쓴다."""
-    t = time.monotonic()
-    snap = _shared().get()
-    diag.peak("wait_max", time.monotonic() - t)
-    return snap
+    return _shared().get()
 
 
 def run_action(action: Callable[[psycopg.Connection], str]) -> None:

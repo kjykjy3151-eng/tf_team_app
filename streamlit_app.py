@@ -2,7 +2,7 @@
 """팀 편성 앱 진입점. 로그인 여부와 관리자 여부로 화면을 나눈다."""
 import streamlit as st
 
-from tf import diag, ui_admin, ui_student
+from tf import ui_admin, ui_student
 from tf.auth import ensure_admin, login
 from tf.config import get_secret
 from tf.db import get_pool
@@ -30,12 +30,6 @@ def init_admin() -> bool:
     return True
 
 
-@st.cache_resource
-def _start_diag() -> None:
-    diag.start()
-
-
-_start_diag()
 admin_ready = init_admin()
 user = st.session_state.get("user")
 
