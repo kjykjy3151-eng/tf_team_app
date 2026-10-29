@@ -103,7 +103,7 @@ def _assign_section(user: User, state) -> None:
             ]
         )
     if st.button("배정안 확정", key="admin_confirm", type="primary"):
-        if not draft:
+        if draft is None:
             set_result("막힘: 확정할 배정안이 없음")
         else:
             _act(lambda conn: confirm_assignment(conn, user, draft), clear_draft=True)

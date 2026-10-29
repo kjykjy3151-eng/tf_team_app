@@ -217,6 +217,8 @@ def assign(
     if found is None:
         reason = no_solution_reason(state.teams, state.unassigned)
         return AssignOutcome(None, "막힘: 규칙을 지키는 배정이 없음", f"규칙을 지키는 배정이 없음: {reason}")
+    if not state.unassigned:
+        return AssignOutcome({}, "승인: 팀이 없는 학생이 없어 배정할 학생이 없음", "팀이 없는 학생이 없음(AI를 부르지 않음)", "배정할 학생 없음")
     if not use_ai:
         return AssignOutcome(
             found, "승인: 앱이 규칙을 지키는 배정을 찾음(AI를 부르지 않음)", "AI를 부르지 않고 앱이 배정함", "앱 배정(AI를 부르지 않음)"

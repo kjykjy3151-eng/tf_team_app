@@ -12,7 +12,7 @@ from tf.ai import AiError, assign, call_model, parse_assignment, recent_logs
 from tf.auth import User
 from tf.roster import reset_with_roster
 from tf.rules import Student
-from tf.service import apply, close_recruitment, vote
+from tf.service import apply, close_recruitment, confirm_assignment, vote
 
 ADMIN = User("admin", "관리자", True)
 PL, WP, FD, TT, RW, PT = "기획자", "웹 프로그래머", "프론트엔드 디자이너", "테스터", "보고서 작성자", "발표자"
@@ -185,6 +185,20 @@ def test_assign_no_solution_does_not_call_ai(conn):
     assert caller.calls == []
     assert out.message == "막힘: 규칙을 지키는 배정이 없음"
     assert out.status == "규칙을 지키는 배정이 없음: 팀1에 웹 프로그래머를 맡을 학생이 없음"
+
+
+def test_assign_with_no_unassigned_does_not_call_ai(conn):
+    # 마감 때 모든 학생이 규칙을 지키는 팀에 있으면 배정할 학생이 없다. 빈 배정안도 확정할 수 있어야 한다.
+    students = [Student("A", "이름A", PL), Student("B", "이름B", WP)]
+    reset_with_roster(conn, ADMIN, students, 1)
+    apply(conn, "A", 1); apply(conn, "B", 1); vote(conn, "A", "B", True)
+    close_recruitment(conn, ADMIN)
+    caller = fake_caller({})
+    out = assign(conn, ADMIN, use_ai=True, on_status=lambda s: None, caller=caller, models=MODELS, api_key=KEY)
+    assert caller.calls == []
+    assert out.assignment == {}
+    assert out.message == "승인: 팀이 없는 학생이 없어 배정할 학생이 없음"
+    assert confirm_assignment(conn, ADMIN, out.assignment) == "승인: 배정을 확정함(0명)"
 
 
 def test_assign_without_ai(conn):
