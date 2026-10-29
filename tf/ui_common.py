@@ -128,11 +128,9 @@ def render_teams(teams, my_team_no: int | None, apply_button: Callable[[int], No
     for team in teams:
         with st.container(key=f"team_{team.no}", border=True):
             mine = " `내 팀`" if team.no == my_team_no else ""
-            st.markdown(f"**팀{team.no}**{mine} ({len(team.members)}/{TEAM_MAX}명)")
-            if team.members:
-                for m in team.members:
-                    st.markdown(f"- {student_line(m)}")
-            else:
-                st.write("빈 팀")
+            # 팀 이름과 팀원을 한 요소로 그린다. 요소가 적을수록 여러 학생이 접속했을 때 서버가 덜 바쁘다.
+            lines = [f"- {student_line(m)}" for m in team.members] or ["빈 팀"]
+            title = f"**팀{team.no}**{mine} ({len(team.members)}/{TEAM_MAX}명)"
+            st.markdown("\n".join([title, "", *lines]))
             if apply_button:
                 apply_button(team.no)
