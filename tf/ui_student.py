@@ -1,6 +1,10 @@
 # 2026-10-27 16:12 KST
 """학생 화면: 팀 목록, 지원, 내 팀에 들어온 지원에 투표(공고 2.4절, 2.8절)."""
+import time
+
 import streamlit as st
+
+from tf import diag
 
 from tf.auth import User
 from tf.config import REFRESH_SEC, to_kst
@@ -26,6 +30,15 @@ def _live(user: User) -> None:
     result는 이 조각 밖(화면 위쪽)에 있고 세션에 저장되어 있어서 다시 그려도 사라지지 않는다.
     단추를 누르면 _act가 앱 전체를 다시 그려 result와 팀 목록을 함께 바꾼다.
     """
+    t = time.monotonic()
+    try:
+        _draw(user)
+    finally:
+        took = time.monotonic() - t
+        diag.add("renders"); diag.add("render_sec", took); diag.peak("render_max", took)
+
+
+def _draw(user: User) -> None:
     me = user.student_no
     snap = get_snapshot()
     state = snap.state
